@@ -1,110 +1,87 @@
-import { createSlice } from "@reduxjs/toolkit";
-import { dummyWorkspaces } from "../assets/assets";
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import api from "../api/api";
 
-const initialState = {
-    workspaces: dummyWorkspaces || [],
-    currentWorkspace: dummyWorkspaces[1],
-    loading: false,
-};
+export const fetchWorkspaces = createAsyncThunk(
+  "workspace/fetchWorkspaces",
+  async () => {
+    const res = await api.get("/workspaces");
+    return res.data;
+  }
+);
+
+export const fetchWorkspaceById = createAsyncThunk(
+  "workspace/fetchWorkspaceById",
+  async (workspaceId) => {
+    const res = await api.get(`/workspaces/${workspaceId}`);
+    return res.data;
+  }
+);
 
 const workspaceSlice = createSlice({
-    name: "workspace",
-    initialState,
-    reducers: {
-        setWorkspaces: (state, action) => {
-            state.workspaces = action.payload;
-        },
-        setCurrentWorkspace: (state, action) => {
-            localStorage.setItem("currentWorkspaceId", action.payload);
-            state.currentWorkspace = state.workspaces.find((w) => w.id === action.payload);
-        },
-        addWorkspace: (state, action) => {
-            state.workspaces.push(action.payload);
+  name: "workspace",
+  initialState: {
+    workspaces: [],
+    currentWorkspace: null,
+    loading: false,
+  },
 
-            // set current workspace to the new workspace
-            if (state.currentWorkspace?.id !== action.payload.id) {
-                state.currentWorkspace = action.payload;
-            }
-        },
-        updateWorkspace: (state, action) => {
-            state.workspaces = state.workspaces.map((w) =>
-                w.id === action.payload.id ? action.payload : w
-            );
+  reducers: {
 
-            // if current workspace is updated, set it to the updated workspace
-            if (state.currentWorkspace?.id === action.payload.id) {
-                state.currentWorkspace = action.payload;
-            }
-        },
-        deleteWorkspace: (state, action) => {
-            state.workspaces = state.workspaces.filter((w) => w._id !== action.payload);
-        },
-        addProject: (state, action) => {
-            state.currentWorkspace.projects.push(action.payload);
-            // find workspace by id and add project to it
-            state.workspaces = state.workspaces.map((w) =>
-                w.id === state.currentWorkspace.id ? { ...w, projects: w.projects.concat(action.payload) } : w
-            );
-        },
-        addTask: (state, action) => {
+    setCurrentWorkspace: (state, action) => {
+      const id = action.payload;
+      state.currentWorkspace = state.workspaces.find((w) => w.id === id);
+    },
 
-            state.currentWorkspace.projects = state.currentWorkspace.projects.map((p) => {
-                console.log(p.id, action.payload.projectId, p.id === action.payload.projectId);
-                if (p.id === action.payload.projectId) {
-                    p.tasks.push(action.payload);
-                }
-                return p;
-            });
+    deleteTask: (state, action) => {
+      const { projectId, taskId } = action.payload;
 
-            // find workspace and project by id and add task to it
-            state.workspaces = state.workspaces.map((w) =>
-                w.id === state.currentWorkspace.id ? {
-                    ...w, projects: w.projects.map((p) =>
-                        p.id === action.payload.projectId ? { ...p, tasks: p.tasks.concat(action.payload) } : p
-                    )
-                } : w
-            );
-        },
-        updateTask: (state, action) => {
-            state.currentWorkspace.projects.map((p) => {
-                if (p.id === action.payload.projectId) {
-                    p.tasks = p.tasks.map((t) =>
-                        t.id === action.payload.id ? action.payload : t
-                    );
-                }
-            });
-            // find workspace and project by id and update task in it
-            state.workspaces = state.workspaces.map((w) =>
-                w.id === state.currentWorkspace.id ? {
-                    ...w, projects: w.projects.map((p) =>
-                        p.id === action.payload.projectId ? {
-                            ...p, tasks: p.tasks.map((t) =>
-                                t.id === action.payload.id ? action.payload : t
-                            )
-                        } : p
-                    )
-                } : w
-            );
-        },
-        deleteTask: (state, action) => {
-            state.currentWorkspace.projects.map((p) => {
-                p.tasks = p.tasks.filter((t) => !action.payload.includes(t.id));
-                return p;
-            });
-            // find workspace and project by id and delete task from it
-            state.workspaces = state.workspaces.map((w) =>
-                w.id === state.currentWorkspace.id ? {
-                    ...w, projects: w.projects.map((p) =>
-                        p.id === action.payload.projectId ? {
-                            ...p, tasks: p.tasks.filter((t) => !action.payload.includes(t.id))
-                        } : p
-                    )
-                } : w
-            );
-        }
+      const project = state.currentWorkspace?.projects?.find(
+        (p) => p.id === projectId
+      );
 
+      if (!project) return;
+
+      project.tasks = project.tasks.filter((t) => t.id !== taskId);
+    },
+
+    updateTask: (state, action) => {
+      const { projectId, taskId, updates } = action.payload;
+
+      const project = state.currentWorkspace?.projects?.find(
+        (p) => p.id === projectId
+      );
+
+      if (!project) return;
+
+      const task = project.tasks.find((t) => t.id === taskId);
+
+      if (!task) return;
+
+      Object.assign(task, updates);
     }
+
+  },
+
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchWorkspaces.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(fetchWorkspaces.fulfilled, (state, action) => {
+        state.workspaces = action.payload;
+        state.currentWorkspace = action.payload[0] || null;
+        state.loading = false;
+      })
+      .addCase(fetchWorkspaceById.fulfilled, (state, action) => {
+        state.currentWorkspace = action.payload;
+      });
+  },
 });
 
-export const { setWorkspaces, setCurrentWorkspace, addWorkspace, updateWorkspace, deleteWorkspace, addProject, addTask, updateTask, deleteTask } = workspaceSlice.actions;
+export const {
+  setCurrentWorkspace,
+  deleteTask,
+  updateTask
+} = workspaceSlice.actions;
+
 export default workspaceSlice.reducer;
