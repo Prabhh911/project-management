@@ -6,13 +6,13 @@ import Projects from "./pages/Projects";
 import Team from "./pages/Team";
 import ProjectDetails from "./pages/ProjectDetails";
 import TaskDetails from "./pages/TaskDetails";
+import Settings from "./pages/Settings"; // FIX: added Settings page
 
 import { useEffect } from "react";
 import { useDispatch } from "react-redux";
 import { fetchWorkspaces } from "./features/workspaceSlice";
 
 const App = () => {
-
     const dispatch = useDispatch();
 
     useEffect(() => {
@@ -21,21 +21,16 @@ const App = () => {
 
     return (
         <>
-            <Toaster />
-
+            <Toaster position="top-right" />
             <Routes>
                 <Route path="/" element={<Layout />}>
-
                     <Route index element={<Dashboard />} />
-
                     <Route path="team" element={<Team />} />
-
                     <Route path="projects" element={<Projects />} />
-
                     <Route path="projectsDetail" element={<ProjectDetails />} />
-
                     <Route path="taskDetails" element={<TaskDetails />} />
-
+                    {/* FIX: Settings route was missing */}
+                    <Route path="settings" element={<Settings />} />
                 </Route>
             </Routes>
         </>

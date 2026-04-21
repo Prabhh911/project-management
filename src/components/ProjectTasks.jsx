@@ -4,6 +4,7 @@ import { useDispatch } from "react-redux";
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { deleteTask, updateTask } from "../features/workspaceSlice";
+import api from "../api/api";
 import { Bug, CalendarIcon, GitCommit, MessageSquare, Square, Trash, XIcon, Zap } from "lucide-react";
 
 const typeIcons = {
@@ -25,12 +26,7 @@ const ProjectTasks = ({ tasks }) => {
     const navigate = useNavigate();
     const [selectedTasks, setSelectedTasks] = useState([]);
 
-    const [filters, setFilters] = useState({
-        status: "",
-        type: "",
-        priority: "",
-        assignee: "",
-    });
+    const [filters, setFilters] = useState({ status: "", type: "", priority: "", assignee: "" });
 
     const assigneeList = useMemo(
         () => Array.from(new Set(tasks.map((t) => t.assignee?.name).filter(Boolean))),
@@ -42,7 +38,7 @@ const ProjectTasks = ({ tasks }) => {
             const { status, type, priority, assignee } = filters;
             return (
                 (!status || task.status === status) &&
-                (!type || task.type === type) &&
+                (!type || (task.type || "TASK") === type) &&
                 (!priority || task.priority === priority) &&
                 (!assignee || task.assignee?.name === assignee)
             );
@@ -55,42 +51,37 @@ const ProjectTasks = ({ tasks }) => {
     };
 
     const handleStatusChange = async (taskId, newStatus) => {
+        const toastId = toast.loading("Updating status...");
         try {
-            toast.loading("Updating status...");
-
-            //  Simulate API call
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-
-            let updatedTask = structuredClone(tasks.find((t) => t.id === taskId));
-            updatedTask.status = newStatus;
+            // FIX: actually save to DB — was only updating Redux (lost on refresh)
+            await api.patch(`/tasks/${taskId}`, { status: newStatus });
+            const updatedTask = { ...tasks.find((t) => String(t.id) === String(taskId)), status: newStatus };
             dispatch(updateTask(updatedTask));
-
-            toast.dismissAll();
-            toast.success("Task status updated successfully");
+            toast.success("Status updated", { id: toastId });
         } catch (error) {
-            toast.dismissAll();
-            toast.error(error?.response?.data?.message || error.message);
+            toast.error("Failed to update status", { id: toastId });
         }
     };
 
     const handleDelete = async () => {
+        if (!window.confirm("Are you sure you want to delete the selected tasks?")) return;
+        const toastId = toast.loading("Deleting tasks...");
         try {
-            const confirm = window.confirm("Are you sure you want to delete the selected tasks?");
-            if (!confirm) return;
-
-            toast.loading("Deleting tasks...");
-
-            //  Simulate API call
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-
+            // FIX: delete each task in DB — was only removing from Redux
+            await Promise.all(selectedTasks.map((id) => api.delete(`/tasks/${id}`)));
             dispatch(deleteTask(selectedTasks));
-
-            toast.dismissAll();
-            toast.success("Tasks deleted successfully");
+            setSelectedTasks([]);
+            toast.success("Tasks deleted", { id: toastId });
         } catch (error) {
-            toast.dismissAll();
-            toast.error(error?.response?.data?.message || error.message);
+            toast.error("Failed to delete tasks", { id: toastId });
         }
+    };
+
+    // FIX: safe date formatter — returns "-" if due_date is null/invalid
+    const safeFormatDate = (dateVal) => {
+        if (!dateVal) return "-";
+        const d = new Date(dateVal);
+        return isNaN(d.getTime()) ? "-" : format(d, "dd MMMM");
     };
 
     return (
@@ -125,7 +116,7 @@ const ProjectTasks = ({ tasks }) => {
                         ],
                     };
                     return (
-                        <select key={name} name={name} onChange={handleFilterChange} className=" border not-dark:bg-white border-zinc-300 dark:border-zinc-800 outline-none px-3 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200" >
+                        <select key={name} name={name} onChange={handleFilterChange} className="border not-dark:bg-white border-zinc-300 dark:border-zinc-800 outline-none px-3 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200">
                             {options[name].map((opt, idx) => (
                                 <option key={idx} value={opt.value}>{opt.label}</option>
                             ))}
@@ -133,16 +124,15 @@ const ProjectTasks = ({ tasks }) => {
                     );
                 })}
 
-                {/* Reset filters */}
                 {(filters.status || filters.type || filters.priority || filters.assignee) && (
-                    <button type="button" onClick={() => setFilters({ status: "", type: "", priority: "", assignee: "" })} className="px-3 py-1 flex items-center gap-2 rounded bg-gradient-to-br from-purple-400 to-purple-500 text-zinc-100 dark:text-zinc-200 text-sm transition-colors" >
+                    <button type="button" onClick={() => setFilters({ status: "", type: "", priority: "", assignee: "" })} className="px-3 py-1 flex items-center gap-2 rounded bg-gradient-to-br from-purple-400 to-purple-500 text-zinc-100 text-sm">
                         <XIcon className="size-3" /> Reset
                     </button>
                 )}
 
                 {selectedTasks.length > 0 && (
-                    <button type="button" onClick={handleDelete} className="px-3 py-1 flex items-center gap-2 rounded bg-gradient-to-br from-indigo-400 to-indigo-500 text-zinc-100 dark:text-zinc-200 text-sm transition-colors" >
-                        <Trash className="size-3" /> Delete
+                    <button type="button" onClick={handleDelete} className="px-3 py-1 flex items-center gap-2 rounded bg-gradient-to-br from-indigo-400 to-indigo-500 text-zinc-100 text-sm">
+                        <Trash className="size-3" /> Delete ({selectedTasks.length})
                     </button>
                 )}
             </div>
@@ -150,13 +140,21 @@ const ProjectTasks = ({ tasks }) => {
             {/* Tasks Table */}
             <div className="overflow-auto rounded-lg lg:border border-zinc-300 dark:border-zinc-800">
                 <div className="w-full">
-                    {/* Desktop/Table View */}
+                    {/* Desktop View */}
                     <div className="hidden lg:block overflow-x-auto">
                         <table className="min-w-full text-sm text-left not-dark:bg-white text-zinc-900 dark:text-zinc-300">
-                            <thead className="text-xs uppercase dark:bg-zinc-800/70 text-zinc-500 dark:text-zinc-400 ">
+                            <thead className="text-xs uppercase dark:bg-zinc-800/70 text-zinc-500 dark:text-zinc-400">
                                 <tr>
                                     <th className="pl-2 pr-1">
-                                        <input onChange={() => selectedTasks.length > 1 ? setSelectedTasks([]) : setSelectedTasks(tasks.map((t) => t.id))} checked={selectedTasks.length === tasks.length} type="checkbox" className="size-3 accent-zinc-600 dark:accent-zinc-500" />
+                                        <input
+                                            onChange={() => selectedTasks.length === tasks.length
+                                                ? setSelectedTasks([])
+                                                : setSelectedTasks(tasks.map((t) => t.id))
+                                            }
+                                            checked={tasks.length > 0 && selectedTasks.length === tasks.length}
+                                            type="checkbox"
+                                            className="size-3"
+                                        />
                                     </th>
                                     <th className="px-4 pl-0 py-3">Title</th>
                                     <th className="px-4 py-3">Type</th>
@@ -169,43 +167,60 @@ const ProjectTasks = ({ tasks }) => {
                             <tbody>
                                 {filteredTasks.length > 0 ? (
                                     filteredTasks.map((task) => {
-                                        const { icon: Icon, color } = typeIcons[task.type] || {};
-                                        const { background, prioritycolor } = priorityTexts[task.priority] || {};
+                                        // FIX: task.type can be null from DB
+                                        const taskType = task.type || "TASK";
+                                        const { icon: Icon, color } = typeIcons[taskType] || typeIcons["TASK"];
+                                        const { background, prioritycolor } = priorityTexts[task.priority] || priorityTexts["MEDIUM"];
 
                                         return (
-                                            <tr key={task.id} onClick={() => navigate(`/taskDetails?projectId=${task.projectId}&taskId=${task.id}`)} className=" border-t border-zinc-300 dark:border-zinc-800 group hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-all cursor-pointer" >
-                                                <td onClick={e => e.stopPropagation()} className="pl-2 pr-1">
-                                                    <input type="checkbox" className="size-3 accent-zinc-600 dark:accent-zinc-500" onChange={() => selectedTasks.includes(task.id) ? setSelectedTasks(selectedTasks.filter((i) => i !== task.id)) : setSelectedTasks((prev) => [...prev, task.id])} checked={selectedTasks.includes(task.id)} />
+                                            <tr
+                                                key={task.id}
+                                                onClick={() => navigate(`/taskDetails?projectId=${task.project_id}&taskId=${task.id}`)}
+                                                className="border-t border-zinc-300 dark:border-zinc-800 group hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-all cursor-pointer"
+                                            >
+                                                <td onClick={(e) => e.stopPropagation()} className="pl-2 pr-1">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="size-3"
+                                                        onChange={() => selectedTasks.includes(task.id)
+                                                            ? setSelectedTasks(selectedTasks.filter((i) => i !== task.id))
+                                                            : setSelectedTasks((prev) => [...prev, task.id])
+                                                        }
+                                                        checked={selectedTasks.includes(task.id)}
+                                                    />
                                                 </td>
                                                 <td className="px-4 pl-0 py-2">{task.title}</td>
                                                 <td className="px-4 py-2">
                                                     <div className="flex items-center gap-2">
-                                                        {Icon && <Icon className={`size-4 ${color}`} />}
-                                                        <span className={`uppercase text-xs ${color}`}>{task.type}</span>
+                                                        <Icon className={`size-4 ${color}`} />
+                                                        <span className={`uppercase text-xs ${color}`}>{taskType}</span>
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-2">
                                                     <span className={`text-xs px-2 py-1 rounded ${background} ${prioritycolor}`}>
-                                                        {task.priority}
+                                                        {task.priority || "MEDIUM"}
                                                     </span>
                                                 </td>
-                                                <td onClick={e => e.stopPropagation()} className="px-4 py-2">
-                                                    <select name="status" onChange={(e) => handleStatusChange(task.id, e.target.value)} value={task.status} className="group-hover:ring ring-zinc-100 outline-none px-2 pr-4 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200 cursor-pointer" >
+                                                <td onClick={(e) => e.stopPropagation()} className="px-4 py-2">
+                                                    <select
+                                                        name="status"
+                                                        onChange={(e) => handleStatusChange(task.id, e.target.value)}
+                                                        value={task.status || "TODO"}
+                                                        className="group-hover:ring ring-zinc-100 outline-none px-2 pr-4 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200 cursor-pointer"
+                                                    >
                                                         <option value="TODO">To Do</option>
                                                         <option value="IN_PROGRESS">In Progress</option>
                                                         <option value="DONE">Done</option>
                                                     </select>
                                                 </td>
                                                 <td className="px-4 py-2">
-                                                    <div className="flex items-center gap-2">
-                                                        <img src={task.assignee?.image} className="size-5 rounded-full" alt="avatar" />
-                                                        {task.assignee?.name || "-"}
-                                                    </div>
+                                                    {task.assignee?.name || "-"}
                                                 </td>
                                                 <td className="px-4 py-2">
+                                                    {/* FIX: was crashing when due_date is null */}
                                                     <div className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400">
                                                         <CalendarIcon className="size-4" />
-                                                        {format(new Date(task.due_date), "dd MMMM")}
+                                                        {safeFormatDate(task.due_date)}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -214,7 +229,7 @@ const ProjectTasks = ({ tasks }) => {
                                 ) : (
                                     <tr>
                                         <td colSpan="7" className="text-center text-zinc-500 dark:text-zinc-400 py-6">
-                                            No tasks found for the selected filters.
+                                            No tasks found.
                                         </td>
                                     </tr>
                                 )}
@@ -222,56 +237,57 @@ const ProjectTasks = ({ tasks }) => {
                         </table>
                     </div>
 
-                    {/* Mobile/Card View */}
+                    {/* Mobile View */}
                     <div className="lg:hidden flex flex-col gap-4">
                         {filteredTasks.length > 0 ? (
                             filteredTasks.map((task) => {
-                                const { icon: Icon, color } = typeIcons[task.type] || {};
-                                const { background, prioritycolor } = priorityTexts[task.priority] || {};
+                                const taskType = task.type || "TASK";
+                                const { icon: Icon, color } = typeIcons[taskType] || typeIcons["TASK"];
+                                const { background, prioritycolor } = priorityTexts[task.priority] || priorityTexts["MEDIUM"];
 
                                 return (
-                                    <div key={task.id} className=" dark:bg-gradient-to-br dark:from-zinc-800/70 dark:to-zinc-900/50 border border-zinc-300 dark:border-zinc-800 rounded-lg p-4 flex flex-col gap-2">
+                                    <div key={task.id} className="dark:bg-gradient-to-br dark:from-zinc-800/70 dark:to-zinc-900/50 border border-zinc-300 dark:border-zinc-800 rounded-lg p-4 flex flex-col gap-2">
                                         <div className="flex items-center justify-between">
                                             <h3 className="text-zinc-900 dark:text-zinc-200 text-sm font-semibold">{task.title}</h3>
-                                            <input type="checkbox" className="size-4 accent-zinc-600 dark:accent-zinc-500" onChange={() => selectedTasks.includes(task.id) ? setSelectedTasks(selectedTasks.filter((i) => i !== task.id)) : setSelectedTasks((prev) => [...prev, task.id])} checked={selectedTasks.includes(task.id)} />
+                                            <input
+                                                type="checkbox"
+                                                className="size-4"
+                                                onChange={() => selectedTasks.includes(task.id)
+                                                    ? setSelectedTasks(selectedTasks.filter((i) => i !== task.id))
+                                                    : setSelectedTasks((prev) => [...prev, task.id])
+                                                }
+                                                checked={selectedTasks.includes(task.id)}
+                                            />
                                         </div>
-
-                                        <div className="text-xs text-zinc-600 dark:text-zinc-400 flex items-center gap-2">
-                                            {Icon && <Icon className={`size-4 ${color}`} />}
-                                            <span className={`${color} uppercase`}>{task.type}</span>
+                                        <div className="text-xs flex items-center gap-2">
+                                            <Icon className={`size-4 ${color}`} />
+                                            <span className={`${color} uppercase`}>{taskType}</span>
                                         </div>
-
-                                        <div>
-                                            <span className={`text-xs px-2 py-1 rounded ${background} ${prioritycolor}`}>
-                                                {task.priority}
-                                            </span>
-                                        </div>
-
-                                        <div>
-                                            <label className="text-zinc-600 dark:text-zinc-400 text-xs">Status</label>
-                                            <select name="status" onChange={(e) => handleStatusChange(task.id, e.target.value)} value={task.status} className="w-full mt-1 bg-zinc-100 dark:bg-zinc-800 ring-1 ring-zinc-300 dark:ring-zinc-700 outline-none px-2 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200" >
-                                                <option value="TODO">To Do</option>
-                                                <option value="IN_PROGRESS">In Progress</option>
-                                                <option value="DONE">Done</option>
-                                            </select>
-                                        </div>
-
-                                        <div className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                                            <img src={task.assignee?.image} className="size-5 rounded-full" alt="avatar" />
+                                        <span className={`text-xs px-2 py-1 rounded w-fit ${background} ${prioritycolor}`}>
+                                            {task.priority || "MEDIUM"}
+                                        </span>
+                                        <select
+                                            name="status"
+                                            onChange={(e) => handleStatusChange(task.id, e.target.value)}
+                                            value={task.status || "TODO"}
+                                            className="w-full mt-1 bg-zinc-100 dark:bg-zinc-800 ring-1 ring-zinc-300 dark:ring-zinc-700 outline-none px-2 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200"
+                                        >
+                                            <option value="TODO">To Do</option>
+                                            <option value="IN_PROGRESS">In Progress</option>
+                                            <option value="DONE">Done</option>
+                                        </select>
+                                        <div className="text-sm text-zinc-700 dark:text-zinc-300">
                                             {task.assignee?.name || "-"}
                                         </div>
-
                                         <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
                                             <CalendarIcon className="size-4" />
-                                            {format(new Date(task.due_date), "dd MMMM")}
+                                            {safeFormatDate(task.due_date)}
                                         </div>
                                     </div>
                                 );
                             })
                         ) : (
-                            <p className="text-center text-zinc-500 dark:text-zinc-400 py-4">
-                                No tasks found for the selected filters.
-                            </p>
+                            <p className="text-center text-zinc-500 dark:text-zinc-400 py-4">No tasks found.</p>
                         )}
                     </div>
                 </div>

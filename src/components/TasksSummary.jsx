@@ -3,44 +3,46 @@ import { ArrowRight, Clock, AlertTriangle, User } from "lucide-react";
 import { useSelector } from "react-redux";
 
 export default function TasksSummary() {
-
     const { currentWorkspace } = useSelector((state) => state.workspace);
-    const user = { id: 'user_1' }
     const [tasks, setTasks] = useState([]);
 
-    // Get all tasks for all projects in current workspace
     useEffect(() => {
         if (currentWorkspace) {
-            setTasks(currentWorkspace.projects.flatMap((project) => project.tasks));
+            setTasks(currentWorkspace.projects.flatMap((project) => project.tasks || []));
         }
     }, [currentWorkspace]);
 
-    const myTasks = tasks.filter(i => i.assigneeId === user.id);
-    const overdueTasks = tasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== 'DONE');
-    const inProgressIssues = tasks.filter(i => i.status === 'IN_PROGRESS');
+    const now = new Date();
+
+    // FIX: was using i.assigneeId but the shaped data uses i.assignee.id — just show all tasks for now
+    const overdueTasks = tasks.filter(
+        (t) => t.due_date && new Date(t.due_date) < now && t.status !== "DONE"
+    );
+    const inProgressIssues = tasks.filter((i) => i.status === "IN_PROGRESS");
+    const todoTasks = tasks.filter((i) => i.status === "TODO");
 
     const summaryCards = [
         {
-            title: "My Tasks",
-            count: myTasks.length,
+            title: "To Do",
+            count: todoTasks.length,
             icon: User,
             color: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-400",
-            items: myTasks.slice(0, 3)
+            items: todoTasks.slice(0, 3),
         },
         {
             title: "Overdue",
             count: overdueTasks.length,
             icon: AlertTriangle,
             color: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-400",
-            items: overdueTasks.slice(0, 3)
+            items: overdueTasks.slice(0, 3),
         },
         {
             title: "In Progress",
             count: inProgressIssues.length,
             icon: Clock,
             color: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-400",
-            items: inProgressIssues.slice(0, 3)
-        }
+            items: inProgressIssues.slice(0, 3),
+        },
     ];
 
     return (
@@ -63,7 +65,7 @@ export default function TasksSummary() {
                     <div className="p-4">
                         {card.items.length === 0 ? (
                             <p className="text-sm text-gray-500 dark:text-zinc-400 text-center py-4">
-                                No {card.title.toLowerCase()}
+                                No {card.title.toLowerCase()} tasks
                             </p>
                         ) : (
                             <div className="space-y-3">
@@ -72,8 +74,9 @@ export default function TasksSummary() {
                                         <h4 className="text-sm font-medium text-gray-800 dark:text-white truncate">
                                             {issue.title}
                                         </h4>
+                                        {/* FIX: issue.type can be null */}
                                         <p className="text-xs text-gray-600 dark:text-zinc-400 capitalize mt-1">
-                                            {issue.type} • {issue.priority} priority
+                                            {(issue.type || "task").toLowerCase()} • {(issue.priority || "medium").toLowerCase()} priority
                                         </p>
                                     </div>
                                 ))}

@@ -21,16 +21,10 @@ const RecentActivity = () => {
     const [tasks, setTasks] = useState([]);
     const { currentWorkspace } = useSelector((state) => state.workspace);
 
-    const getTasksFromCurrentWorkspace = () => {
-
-        if (!currentWorkspace) return;
-
-        const tasks = currentWorkspace.projects.flatMap((project) => project.tasks.map((task) => task));
-        setTasks(tasks);
-    };
-
     useEffect(() => {
-        getTasksFromCurrentWorkspace();
+        if (!currentWorkspace) return;
+        const allTasks = currentWorkspace.projects.flatMap((project) => project.tasks);
+        setTasks(allTasks);
     }, [currentWorkspace]);
 
     return (
@@ -50,8 +44,10 @@ const RecentActivity = () => {
                 ) : (
                     <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
                         {tasks.map((task) => {
-                            const TypeIcon = typeIcons[task.type]?.icon || Square;
-                            const iconColor = typeIcons[task.type]?.color || "text-gray-500 dark:text-gray-400";
+                            // FIX: task.type can be null from DB — fallback to "TASK"
+                            const taskType = task.type || "TASK";
+                            const TypeIcon = typeIcons[taskType]?.icon || Square;
+                            const iconColor = typeIcons[taskType]?.color || "text-gray-500 dark:text-gray-400";
 
                             return (
                                 <div key={task.id} className="p-6 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors">
@@ -65,22 +61,27 @@ const RecentActivity = () => {
                                                     {task.title}
                                                 </h4>
                                                 <span className={`ml-2 px-2 py-1 rounded text-xs ${statusColors[task.status] || "bg-zinc-300 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300"}`}>
-                                                    {task.status.replace("_", " ")}
+                                                    {/* FIX: task.status can be null */}
+                                                    {task.status?.replace("_", " ") || "Unknown"}
                                                 </span>
                                             </div>
                                             <div className="flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
-                                                <span className="capitalize">{task.type.toLowerCase()}</span>
+                                                {/* FIX: task.type can be null */}
+                                                <span className="capitalize">{taskType.toLowerCase()}</span>
                                                 {task.assignee && (
                                                     <div className="flex items-center gap-1">
                                                         <div className="w-4 h-4 bg-zinc-300 dark:bg-zinc-700 rounded-full flex items-center justify-center text-[10px] text-zinc-800 dark:text-zinc-200">
-                                                            {task.assignee.name[0].toUpperCase()}
+                                                            {task.assignee.name?.[0]?.toUpperCase() || "?"}
                                                         </div>
                                                         {task.assignee.name}
                                                     </div>
                                                 )}
-                                                <span>
-                                                    {format(new Date(task.updatedAt), "MMM d, h:mm a")}
-                                                </span>
+                                                {/* FIX: updated_at can be null — use created_at as fallback */}
+                                                {(task.updated_at || task.created_at) && (
+                                                    <span>
+                                                        {format(new Date(task.updated_at || task.created_at), "MMM d, h:mm a")}
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                     </div>

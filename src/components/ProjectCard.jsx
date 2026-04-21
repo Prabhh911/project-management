@@ -9,9 +9,15 @@ const statusColors = {
 };
 
 const ProjectCard = ({ project }) => {
+    // FIX: guard against null status/priority so .replace() never crashes
+    const status = project.status || "PLANNING";
+    const priority = project.priority || "MEDIUM";
+
     return (
-        <Link to={`/projectsDetail?id=${project.id}&tab=tasks`} className="bg-white dark:bg-zinc-950 dark:bg-gradient-to-br dark:from-zinc-800/70 dark:to-zinc-900/50 border border-gray-200 dark:border-zinc-800 hover:border-gray-300 dark:hover:border-zinc-700 rounded-lg p-5 transition-all duration-200 group">
-            {/* Header */}
+        <Link
+            to={`/projectsDetail?id=${project.id}&tab=tasks`}
+            className="bg-white dark:bg-zinc-950 dark:bg-gradient-to-br dark:from-zinc-800/70 dark:to-zinc-900/50 border border-gray-200 dark:border-zinc-800 hover:border-gray-300 dark:hover:border-zinc-700 rounded-lg p-5 transition-all duration-200 group block"
+        >
             <div className="flex items-start justify-between mb-3">
                 <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-gray-900 dark:text-zinc-200 mb-1 truncate group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors">
@@ -24,15 +30,14 @@ const ProjectCard = ({ project }) => {
             </div>
 
             <div className="flex items-center justify-between mb-4">
-                <span className={`px-2 py-0.5 rounded text-xs ${statusColors[project.status]}`} >
-                    {project.status.replace("_", " ")}
+                <span className={`px-2 py-0.5 rounded text-xs ${statusColors[status] || statusColors["PLANNING"]}`}>
+                    {status.replace("_", " ")}
                 </span>
                 <span className="text-xs text-gray-500 dark:text-zinc-500 capitalize">
-                    {project.priority} priority
+                    {priority.toLowerCase()} priority
                 </span>
             </div>
 
-            {/* Progress */}
             <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-500 dark:text-zinc-500">Progress</span>
@@ -42,8 +47,7 @@ const ProjectCard = ({ project }) => {
                     <div className="h-1.5 rounded bg-blue-500" style={{ width: `${project.progress || 0}%` }} />
                 </div>
             </div>
-
-            </Link>
+        </Link>
     );
 };
 

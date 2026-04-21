@@ -1,34 +1,22 @@
 import axios from "axios";
 
-const API = axios.create({
+const api = axios.create({
   baseURL: "http://localhost:5000/api",
   headers: {
-    "Content-Type": "application/json"
-  }
+    "Content-Type": "application/json",
+  },
 });
 
-/* ---------- PROJECTS ---------- */
+// Global error interceptor — logs all API errors to console for easy debugging
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    console.error(
+      `API Error [${error.config?.method?.toUpperCase()} ${error.config?.url}]:`,
+      error.response?.data || error.message
+    );
+    return Promise.reject(error);
+  }
+);
 
-export const getProjects = async () => {
-  const res = await API.get("/projects");
-  return res.data;
-};
-
-export const createProject = async (data) => {
-  const res = await API.post("/projects", data);
-  return res.data;
-};
-
-/* ---------- TASKS ---------- */
-
-export const getTasks = async () => {
-  const res = await API.get("/tasks");
-  return res.data;
-};
-
-export const createTask = async (task) => {
-  const res = await API.post("/tasks", task);
-  return res.data;
-};
-
-export default API;
+export default api;
